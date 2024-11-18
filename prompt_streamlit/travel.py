@@ -28,7 +28,6 @@ import pandas as pd
 import re
 import requests
 import openai
-import tiktoken
 
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
@@ -96,7 +95,7 @@ The travel information is as follows:
 {places_list}
 
 **Constraints**:  
-1. Create the itinerary divided into morning, afternoon, and evening.  
+1. Ensure the itinerary includes all {trip_duration} days, with each day divided into morning, afternoon, and evening. 
 2. The same place or restaurant **should not appear more than once** in the itinerary. A place included on one day should not appear on any other day.  
 3. Include the opening hours and address of each place.  
 4. Add a brief one-sentence introduction for each place.  
@@ -208,6 +207,15 @@ def generate_itinerary_recommendations(city, trip_duration, companions, travel_s
 
 # 6. 메인 함수: 사용자 입력 및 여행일정 생성
 def final_recommendations(city, trip_duration, companions, travel_style, itinerary_style):
+
+    # 여행 일수 추출
+    #days_match = re.search(r"(\d+)\s*days", trip_duration)
+    #if days_match:
+    #    num_days = int(days_match.group(1))
+    #    print(num_days)
+    #else:
+    #    raise ValueError("trip_duration should contain 'days' for parsing.")
+    
     # 사용자 입력 예시
     itinerary_details = {
         "city": city,
@@ -250,5 +258,3 @@ def final_recommendations(city, trip_duration, companions, travel_style, itinera
 
     # 결과 출력
     return itinerary
-
-
