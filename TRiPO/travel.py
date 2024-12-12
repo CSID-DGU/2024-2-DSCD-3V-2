@@ -29,8 +29,19 @@ import streamlit as st
 # .env 파일 로드
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
-pinecone_api_key= os.getenv("PINECONE_API_KEY")
+# 배포용 api 설정
+openai_api_key = st.secrets["OPENAI_API_KEY"]
+pinecone_api_key = st.secrets["PINECONE_API_KEY"]
+
+# API 키 가져오기
+openai_api_key = os.getenv("OPENAI_API_KEY")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+
+# if not openai_api_key or not pinecone_api_key:
+#    raise ValueError("API 키가 Streamlit Secrets에 설정되지 않았습니다.")
+
+openai.api_key = openai_api_key
+# pinecone_api_key= os.getenv("PINECONE_API_KEY")
 
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
@@ -63,10 +74,24 @@ def search_places(city):
     results_best= index.query(vector=query_embedding, top_k=60, namespace=namespace, include_metadata=True)
     return results_best
 
+# 추가요구 반영 검색
+def search_request(city, user_request):
+    if not user_request:
+        return None
+    else:
+        query = f"{user_request} in {city}."
+        query_embedding = model.encode(query).tolist()
+        namespace = f"{city}_tour"
+        results_user= index.query(vector=query_embedding, top_k=60, namespace=namespace, include_metadata=True)
+        return results_user
+
 # 검색 결과 합치기 및 데이터프레임 변환
-def merge_and_deduplicate_places_to_df(results_best, results_style, results_restaurants):
+def merge_and_deduplicate_places_to_df(results_best, results_style, results_restaurants, results_user):
+    # 사용자 요청 결과가 없을 경우 빈 리스트로 초기화
+    if results_user is None:
+        results_user = {'matches': []}
     # 세 결과 리스트를 결합
-    combined_results = results_best['matches'] + results_style['matches'] + results_restaurants['matches']
+    combined_results = results_best['matches'] + results_style['matches'] + results_restaurants['matches'] + results_user['matches']
 
     # 각 항목에서 메타데이터 추출하여 데이터프레임 생성
     places_data = []
@@ -87,8 +112,8 @@ def merge_and_deduplicate_places_to_df(results_best, results_style, results_rest
     # 데이터프레임 생성
     df = pd.DataFrame(places_data)
 
-    # 중복 제거 (장소 이름과 주소를 기준으로)
-    df = df.drop_duplicates(subset=["name", "address"]).reset_index(drop=True)
+    # 중복 제거 (장소 이름을 기준으로)
+    df = df.drop_duplicates(subset=["name"]).reset_index(drop=True)
 
     # 이미지 URL 처리: 첫 번째 URL 추출
     df['image_url'] = df['image_url'].apply(lambda x: x.split(", ")[0])
@@ -117,11 +142,12 @@ Ensure itineraries comply with user-provided constraints such as travel style, p
 prompt_template = """You are a travel itinerary AI expert. Create a travel itinerary for {city} for a duration of {trip_duration}.
 The travel information is as follows:
 
+**travel information**
 - Trip duration: {trip_duration}
 - Companions: {companions}
 - Travel style: {travel_style}
 - Preferred itinerary style: {itinerary_style}
-- user additional request : {user_request}
+- additional user request : {user_request}
 
 **Please create a travel itinerary using the following list of places based on the conditions**:
 {places_list}
@@ -129,22 +155,23 @@ The travel information is as follows:
 **Constraints**:
 1. Ensure the itinerary includes all {trip_duration} days, with each day divided into morning, afternoon, and evening.
 2. The same place or restaurant **should not appear more than once** in the itinerary. A place included on one day should not appear on any other day.
-  2-1. No location or restaurant should be repeated across the entire itinerary to ensure a unique and diverse travel experience.
+    2-1. No location or restaurant should be repeated across the entire itinerary to ensure a unique and diverse travel experience.
 3. Include the opening hours and address of each place.
 4. Add a brief one-sentence introduction for each place.
 5. Based on the user additional request information, please create a travel itinerary reflecting the user's additional requests. If there are no additional requests, please proceed as planned.
-6. Optimize routes using places_list with latitude and longitude data:
-  6-1. Within the same time slot (Morning/Afternoon/Evening), ensure all places are within 1km or a 15-minute walking distance. Exceptions (e.g., must-visit landmarks) allow up to 2km.
-  6-2. Between time slots, ensure travel time (e.g., Morning → Afternoon → Evening) is within 30 minutes via public transport, with a maximum distance of 20km. Prioritize staying within the same area to minimize travel time and complexity.
-7. Consider **the operating hours** of each place when organizing the itinerary.
+6. Minimize the distance to the next destination (travel location) using the latitude and longitude information from places_list.
+    6-1. Within the same time slot (Morning/Afternoon/Evening), ensure all places are within 1km or a 15-minute walking distance. Exceptions (e.g., must-visit landmarks) allow up to 2km.
+    6-2. Between time slots, ensure travel time (e.g., Morning → Afternoon → Evening) is within 30 minutes via public transport, with a maximum distance of 20km. Prioritize staying within the same area to minimize travel time and complexity.
+7. When organizing the itinerary, consider the **operating hours** of each place to ensure the schedule aligns properly with the time slots (morning/afternoon/evening).
 8. Adjust the itinerary based on the selected itinerary style.
-   8-1. If the '빼곡한 일정' style is selected, **include 2 tourist attractions and 1 restaurant** in the morning, afternoon, and evening, totaling **9 activities per day**.
-   8-2. If the '널널한 일정' style is selected, **include 1 tourist attraction and 1 restaurant** in the morning, afternoon, and evening, totaling **6 activities per day**.
+    8-1. If the '빼곡한 일정' style is selected, **include 2 tourist attractions and 1 restaurant** in the morning, afternoon, and evening, totaling **9 activities per day**.
+    8-2. If the '널널한 일정' style is selected, **include 1 tourist attraction and 1 restaurant** in the morning, afternoon, and evening, totaling **6 activities per day**.
 9. Please provide the result in **JSON format**, using the example structure below.
 10. **The result should be provided in Korean.**
 
 **Output Structure**:
 - Ensure the output contains the date, time period, place name, description, and operating hours for each entry.
+- For example, if the operating hours are 12:00 PM – 2:00 PM and 7:00 PM – 10:00 PM, please display only one of them.
 
 **Example Output Structure**:
 
@@ -304,13 +331,17 @@ def final_recommendations(city, trip_duration, companions, travel_style, itinera
         city=itinerary_details["city"]
     )
 
-    final_results = merge_and_deduplicate_places_to_df(results_style, results_best,results_restaurants)
+    results_user = search_request(city=itinerary_details["city"], user_request=itinerary_details["user_request"])
+
+    final_results = merge_and_deduplicate_places_to_df(results_style, results_best,results_restaurants,results_user)
+    final_results_shuffled = final_results.sample(frac=1).reset_index(drop=True)
 
 
     places_list = "\n".join([
         f"- {row['name']} (카테고리: {row['type']}, 위도: {row['latitude']}, 경도: {row['longitude']}, 운영시간: {row.get('opening_hours', 'N/A')})"
-        for _, row in final_results.iterrows()
+        for _, row in final_results_shuffled.iterrows()
     ])
+
     # 여행일정 생성 호출
     itinerary = generate_itinerary_recommendations(
         city=itinerary_details["city"],

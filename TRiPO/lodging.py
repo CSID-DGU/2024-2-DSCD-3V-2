@@ -1,26 +1,37 @@
 import streamlit as st
 
-# 벡터 DB 및 llm 라이브러리
+import pandas as pd
+from dotenv import load_dotenv
+import ast
+from sentence_transformers import SentenceTransformer
 import pinecone
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
-import openai
-
-# 임베딩 모델 위한 라이브러리
+from pinecone import Pinecone, ServerlessSpec
 from sentence_transformers import SentenceTransformer
 from nltk.tokenize import sent_tokenize
 import numpy as np
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+    HumanMessagePromptTemplate,
+)
+from langchain.memory import ConversationSummaryBufferMemory
+from langchain.chains import LLMChain
+from langchain.memory import ConversationBufferMemory
+from langchain_core.prompts import ChatPromptTemplate
+import getpass
+import os
 import pandas as pd
+from langchain_core.output_parsers import StrOutputParser
+from langchain.chat_models import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+output_parser = StrOutputParser()
 
-# 출력 시간 확인 위한 라이브러리
-import time
-
-# 출력 형태 변환 위한 라이브러리
-import re
+import pandas as pd
 import json
-
-import ast  # 문자열을 안전하게 리스트로 변환하기 위한 모듈
+import re
+import requests
+import openai
 
 # api 로드에 필요
 from dotenv import load_dotenv
@@ -45,16 +56,12 @@ pinecone_api_key = os.getenv("PINECONE_API_KEY")
 import openai
 openai.api_key = openai_api_key
 
-# embedding 모델 로드
-model = SentenceTransformer("sentence-transformers/paraphrase-MiniLM-L6-v2")
-
-
-# 2. 파인콘 초기화     
-from pinecone import Pinecone, ServerlessSpec
+model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
 pinecone = Pinecone(api_key=pinecone_api_key)
 index = pinecone.Index("travel-index")
 
+# 3. 검색 함수 정의
 # 3. 검색 함수 정의
 # 선호 숙소 형태 및 동행인 기반
 def search_places(city, companions, lodging_style):
@@ -63,6 +70,41 @@ def search_places(city, companions, lodging_style):
     namespace = f"{city}_lodging"
     results_style = index.query(vector=query_embedding, top_k=20, namespace=namespace, include_metadata=True)
     return results_style
+
+def places_to_df(lodging_best) :
+  combined_results = lodging_best['matches'] 
+  
+  # 각 항목에서 메타데이터 추출하여 데이터프레임 생성
+  places_data = []
+  for item in combined_results:
+      places_data.append({
+            "PlaceID" :item['metadata'].get('0_placeID', 'N/A'),
+            "name": item['metadata'].get('1_이름', 'N/A'),
+            "address": item['metadata'].get('2_주소', 'N/A'),
+            "rating": item['metadata'].get('3_평점', 0),
+            "latitude": item['metadata'].get('4_위도', 0),
+            "longitude": item['metadata'].get('5_경도', 0),
+            "review": item['metadata'].get('6_리뷰', 'N/A'),
+            "opening_hours": item['metadata'].get('7_영업시간', 'N/A'),
+            "type": item['metadata'].get('8_유형', 'N/A'),
+            "image_url": item['metadata'].get('9_이미지', 'N/A')  # 원본 이미지 데이터 그대로 추가
+        })
+
+# 데이터프레임 생성
+  df = pd.DataFrame(places_data)
+
+    # 중복 제거 (장소 이름과 주소를 기준으로)
+  df = df.drop_duplicates(subset=["name", "address"]).reset_index(drop=True)
+
+    # 이미지 URL 처리: 대괄호 제거 및 첫 번째 URL 추출
+  df['image_url'] = df['image_url'].apply(
+                    lambda x: ast.literal_eval(x)[0] 
+                    if isinstance(x, str) and x.startswith("[") and x.endswith("]") 
+                    else x.split(", ")[0] if isinstance(x, str) and ", " in x 
+                    else x
+                )
+
+  return df
 
 
 # 4. 숙소 리스트 생성을 위한 프롬프트 템플릿 - 영어 버전
@@ -86,79 +128,97 @@ Create a list of the **top 5** accommodations for your customer's trip based on 
 2. Ensure the accommodations are in safe areas of {city}.
 3. Please make the list consist of the \n{recommendations}.
 </requirements>
-"""
 
-output = """
-Ensure the output is valid JSON and strictly adheres to the structure and letter case below:
-[
-    {{"Name": "Paris Perfect", "Location": "25 Pl. Dauphine, 75001 Paris, France"}},
-    {{"Name": "Beau M Hostel", "Location": "108 Rue Damrémont, 75018 Paris, France"}}
-]
+<Example Output Structure>
 
+```json
+{{
+    "숙소 추천": [
+        {{"장소명": "Familia Hôtel"}},
+        {{"장소명": "Beau M Hostel"}}
+    ]
+}}
+</Example Output Structure>
 """
 
 
 # 5. 프롬프트와 LLMChain 설정
 llm = ChatOpenAI(
     temperature=0.1,
-    model_name="gpt-4o",  # 4-turbo보다 빠르고, 한국어도 더 잘함
-    openai_api_key=openai_api_key,
+    model_name="gpt-4o"
 )
+
+
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 
 # 숙소 추천 생성 함수
 def generate_accommodation_recommendations(city, companions, lodging_style, recommendations):
 
     # 페르소나 주입
-    filled_persona = persona  # .format() 제거
-    print(f"Filled Persona:\n{filled_persona}\n")
+    filled_persona = persona
 
     # 템플릿에 사용자 정보 삽입
-    #a1 = time.time()
-    try:
-        formatted_prompt = prompt_template.format(
-            city=city,
-            companions=companions,
-            lodging_style=lodging_style,
-            recommendations=recommendations
-        ) + "\n" + output
-        print(f"Formatted Prompt:\n{formatted_prompt}\n")
-    except KeyError as e:
-        print(f"Error in formatting prompt: {e}")
-        return None
-    #a2 = time.time()
-    #print(f"Prompt Time: {a2 - a1:.2f} seconds")
+    formatted_prompt = prompt_template.format(
+        city=city,
+        companions=companions,
+        lodging_style=lodging_style,
+        recommendations=recommendations
+    )
+    # 프롬프트 구성
+    prompt = ChatPromptTemplate(
+        template=formatted_prompt,
+        messages=[
+            SystemMessagePromptTemplate.from_template(filled_persona),  # 페르소나 주입
+            HumanMessagePromptTemplate.from_template("{input}")  # 질문 입력
+        ]
+    )
 
-    # LangChain 프롬프트 구성
-    #b2 = time.time()
-    try:
-        prompt = ChatPromptTemplate(
-            messages=[
-                SystemMessagePromptTemplate.from_template(filled_persona),
-                HumanMessagePromptTemplate.from_template(formatted_prompt)
-            ]
-        )
-    except Exception as e:
-        print(f"Error in creating ChatPromptTemplate: {e}")
-        return None
-    #b3 = time.time()
-    #print(f"Prompt Template Time: {b3 - b2:.2f} seconds")
+    # RunnableSequence로 구성
+    conversation = prompt | llm
 
-    # LLMChain 설정 및 실행
-    #c1 = time.time()
-    try:
-        conversation = LLMChain(
-            llm=llm,
-            prompt=prompt,
-            verbose=True
-        )
-        result = conversation.run({})
-    except Exception as e:
-        print(f"Error during LLMChain execution: {e}")
-        return None
-    #c2 = time.time()
-    #print(f"Conversation Time: {c2 - c1:.2f} seconds")
+    # 여러 입력 변수를 하나의 딕셔너리로 전달 (invoke로 변경)
+    result = conversation.invoke({
+        "input": formatted_prompt
+    })
     return result
+
+
+def process_and_merge_lodging(itinerary, final_results):
+    """
+    프롬프트 결과물과 검색된 장소 데이터를 결합하여 최종 DataFrame을 생성하는 함수.
+
+    Parameters:
+        itinerary (str): 프롬프트 결과물(JSON 문자열 포함)
+        places_df (pd.DataFrame): merge_and_deduplicate_places_to_df 결과 DataFrame
+
+    Returns:
+        pd.DataFrame: itinerary와 places_df를 장소명을 기준으로 결합한 DataFrame
+    """
+    # Step 1: itinerary에서 JSON 부분만 추출
+    start_index = itinerary.find("{")  # JSON 시작 위치
+    end_index = itinerary.rfind("}")   # JSON 끝 위치
+    json_text = itinerary[start_index:end_index+1]
+    data = json.loads(json_text)
+
+    # Step 2: "여행 일정" 키 아래의 리스트를 DataFrame으로 변환
+    lodging_df = pd.DataFrame(data["숙소 추천"])
+
+    # Step 3: places_df에서 필요한 열 선택 및 컬럼 이름 통일
+    final_results = final_results.rename(columns={
+        'name': '장소명',  # 이름 열 통일
+        'address': '주소',     # 주소 열 이름 통일
+        'image_url': '이미지',
+        'rating' : '평점',
+        'type' : '유형'
+    })
+
+    # Step 5: inner join 수행 (장소명을 기준으로)
+    merged_df = pd.merge(lodging_df, final_results[['장소명', '주소', '이미지','평점','유형','PlaceID']], on='장소명', how='inner')
+
+    # Step 6: 최종 DataFrame 반환
+    return merged_df
+
 
 
 # 6. 메인 함수: 사용자 입력 및 숙소 추천 실행
@@ -166,9 +226,6 @@ def generate_accommodation_recommendations(city, companions, lodging_style, reco
 # 최종 추천 함수 생성
 def final_recommendations(city, companions, lodging_style):
 
-    # 출력 시간 확인
-    #start_time = time.time()  # 시작 시간 기록
-    #a1 = time.time()
     # 사용자 입력 예시
     accommodation_details = {
         "city": city,
@@ -182,36 +239,13 @@ def final_recommendations(city, companions, lodging_style):
         companions=accommodation_details["companions"],
         lodging_style=accommodation_details["lodging_style"]
     )
-    #a2 = time.time()
-    #print(f"Search Time: {a2 - a1:.2f} seconds")
 
-    #b1 = time.time()
-
-    # 파인콘에서 가져온 추천 숙소 리스트 구성 (최대 20개)
-    # 각 추천 숙소 정보를 딕셔너리로 구성
-    
-    temps = [
-        {
-            "PlaceID": match.metadata['0_placeID'],
-            "Name": match.metadata['1_이름'],
-            "Rating": match.metadata['3_평점'],
-            "Location": match.metadata['2_주소'],
-            "Type": match.metadata['8_유형'],
-            "Image": match.metadata['9_이미지'].split(', ')[0]
-                #ast.literal_eval(match.metadata['9_이미지'])[0] 
-                #if match.metadata['9_이미지'].startswith("[") and match.metadata['9_이미지'].endswith("]") 
-                #else match.metadata['9_이미지'].split(', ')[0]
-            #)  # 첫 번째 이미지 URL 처리
-        }
-        for match in search_results.matches
-    ]
-
-
-    # Name, Location, Rating만 리스트로 구성
-    recommendations = [[temp['Name'], temp['Location'], temp['Rating']] for temp in temps]
-
-    # temps 데이터를 데이터프레임으로 변환
-    df_temps = pd.DataFrame(temps)
+    final_results = places_to_df(search_results)
+  
+    recommendations = "\n".join([
+        f"- {row['name']} (주소: {row['address']}, 평점: {row['rating']})"
+        for _, row in final_results.iterrows()
+    ])
 
     # 숙소 추천 생성 호출
     accommodation_recommendations = generate_accommodation_recommendations(
@@ -221,35 +255,8 @@ def final_recommendations(city, companions, lodging_style):
         recommendations=recommendations
     )
 
-    # 불필요한 설명 제거 및 JSON 변환
-    start_index = accommodation_recommendations.find("[")
-    end_index = accommodation_recommendations.rfind("]")
-    json_text = accommodation_recommendations[start_index:end_index + 1].strip()
+    df_lodging = process_and_merge_lodging(accommodation_recommendations.content, final_results)
 
-    # JSON 유효성 확인
-    json_text = re.sub(r"\n\s*", "", json_text)
-    accommodations = json.loads(json_text)
-
-    # 데이터프레임으로 변환
-    df_json = pd.DataFrame(accommodations)
-
-    # 이름과 Location을 기준으로 병합
-    df_result = df_json.merge(
-        df_temps,
-        on=["Name", "Location"],  # 병합 기준: Name과 Location
-        how="left"   # df_json 기준 inner merge
-    )
-
-    #b2 = time.time()
-    #print(f"Recommendation Time: {b2 - b1:.2f} seconds")
-
-
-    # 출력 시간 확인
-    #end_time = time.time()  # 종료 시간 기록
-
-    # 실행 시간 출력
-    #execution_time = end_time - start_time
-    #print(f"\nExecution Time: {execution_time:.2f} seconds")
 
     # 결과 출력
-    return df_result
+    return df_lodging

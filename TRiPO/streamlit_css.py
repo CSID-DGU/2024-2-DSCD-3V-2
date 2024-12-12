@@ -1,8 +1,161 @@
+def get_loading():
+    return """
+    <style>
+        .loader {
+        width: 15px;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        animation: l5 1s infinite linear alternate;
+        }
+
+        @keyframes l5 {
+        0% {
+            box-shadow: 20px 0 #000, -20px 0 #0002;
+            background: #000;
+        }
+        33% {
+            box-shadow: 20px 0 #000, -20px 0 #0002;
+            background: #0002;
+        }
+        66% {
+            box-shadow: 20px 0 #0002, -20px 0 #000;
+            background: #0002;
+        }
+        100% {
+            box-shadow: 20px 0 #0002, -20px 0 #000;
+            background: #000;
+        }
+        }
+        </style>
+        """
+def get_loading1() :
+    return """
+    <style>
+        .loader {
+        width: 120px;
+        height: 20px;
+        -webkit-mask: linear-gradient(90deg, #000 70%, #0000 0) 0 / 20%;
+        background: linear-gradient(#000 0 0) 0 / 0% no-repeat #ddd;
+        animation: l4 2s infinite steps(6);
+        }
+
+        @keyframes l4 {
+        100% {
+            background-size: 120%;
+        }
+        }
+        </style>
+"""
+
+def get_slide() :
+    return """
+    <style>
+        /* 슬라이더 컨테이너 */
+        .slider {
+            width: 308px; /* 확대된 슬라이더 가로 크기 */
+            height: 450px; /* 확대된 슬라이더 세로 크기 */
+            overflow: hidden; /* 넘치는 부분 숨김 */
+            position: relative; /* 상대적 위치 설정 */
+            margin: auto; /* 중앙 정렬 */
+        }
+
+        /* 슬라이드 이미지 컨테이너 */
+        .slides {
+            display: flex;
+            width: calc(308px * 3); /* 이미지 개수만큼 폭 설정 */
+            animation: slide 6s infinite; /* 6초 주기로 애니메이션 실행 */
+        }
+
+        /* 개별 슬라이드 */
+        .slide {
+            min-width: 308px; /* 확대된 슬라이드의 가로 크기 */
+            height: 450px; /* 확대된 슬라이드의 세로 크기 */
+        }
+
+        /* 이미지 */
+        .slide img {
+            width: 308px; /* 이미지의 가로 크기 */
+            height: 450px; /* 이미지의 세로 크기 */
+            object-fit: cover; /* 비율 유지하며 크기 조정 */
+        }
+
+        /* 애니메이션 */
+        @keyframes slide {
+            0% { transform: translateX(0); }
+            33% { transform: translateX(-308px); }
+            66% { transform: translateX(-616px); }
+            100% { transform: translateX(0); }
+        }
+        </style>
+        """
+
+
+def get_status():
+    return """
+    <style>
+        /* 허재원 추가_1130 */
+        .status-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .chatbot-image {
+            width: 350px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        .status-message {
+            text-align: center;
+            font-family: 'Pretendard', sans-serif;
+            font-style: normal;
+            font-weight: 500;
+            font-size: 18px;
+            line-height: 120%;
+            /* identical to box height, or 29px */
+            letter-spacing: -0.02em;
+            margin-top: 10px;
+        }
+        .spinner {
+            margin: 10px auto;
+            width: 40px;
+            height: 40px;
+            position: relative;
+            text-align: center;
+        }
+        .double-bounce1, .double-bounce2 {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #007bff;
+            opacity: 0.6;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: bounce 2s infinite ease-in-out;
+        }
+        .double-bounce2 {
+            animation-delay: -1s;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: scale(0); }
+            50% { transform: scale(1); }
+        }
+    </style>
+"""
 def get_css():
     return """
     <style>
         /* 사이드바 배경 흰색으로 설정 */
         [data-testid="stSidebar"] {
+            background-color: white;
+        }
+
+        /* 오른쪽 메인 화면 배경 흰색으로 고정 */
+        [data-testid="stAppViewContainer"] {
+            background-color: white;
+        }
+
+        /* 상단 헤더 배경 흰색으로 고정 */
+        header[data-testid="stHeader"] {
             background-color: white;
         }
         
@@ -18,6 +171,7 @@ def get_css():
             align-items: center;
             font-size: 20px;
             font-weight: bold;
+            color: black;
         }
         
         /* 텍스트 입력 상자의 테두리 색상 회색으로 설정 (필수)*/
@@ -192,6 +346,7 @@ def get_css():
 
         .main .block-container, .css-1lcbmhc.e1fqkh3o5 {
             padding-top: 0px;  /* 페이지 최상단 간격 제거 */
+            
         }
         .header-container {
             text-align: center;
@@ -199,15 +354,22 @@ def get_css():
             margin-bottom: 20px;
         }
         .header-title {
-            font-size: 24px;
             font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
-            font-weight: bold;
-            margin: 5px 0;
+            font-style: normal;
+            font-weight: 600;
+            font-size: 24px;
+            color: black;
+            margin: 10px 0;
         }
         .header-subtitle {
             font-size: 16px;
             font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
-            color: #888888;
+            color: #606060;
+            font-style: normal;
+            font-weight: 400;
+            line-height: 120%;
+            /* identical to box height, or 24px */
+            letter-spacing: -0.02em;
             margin: 0;
         }
         .loading-container {
@@ -226,79 +388,91 @@ def get_css():
         }
     </style>
 """
+def travel_css():
+    return """
+    <style>
+        /* 사이드바 배경 흰색으로 설정 */
+        [data-testid="stContainer"] {
+            background-color: white;
+        }
+"""
 
 def travel_card_style():
     return """
     <style>
-        /* 여행 일정 카드 스타일 정의 */
-        .subheader {
-            font-size: 18px;
-            font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
-            margin-top: 0px;
-            }
-        .travel-card-container {
-            display: flex;
-            align-items: flex-start; /* 동그라미와 카드 상단 정렬 */
-            margin-bottom: 15px;
+    /* 여행 일정 카드 스타일 정의 */
+    .subheader {
+        font-size: 18px;
+        font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
+        color: black;
+        margin-top: 0px;
         }
-        .card-number {
-            margin-right: 10px; /* 동그라미와 카드 사이 간격 */
-        }
-        .circle {
-            width: 21px;
-            height: 21px;
-            border-radius: 50%; /* 원형 */
-            background-color: #00199A; /* 파란색 배경 */
-            color: white; /* 흰색 텍스트 */
-            font-size: 11px;
-            font-family: 'Pretendard', sans-serif;
-            text-align: center;
-            line-height: 21px;
-        }
-        .travel-card {
-            flex: 1;
-            border-radius: 8px;
-            padding: 10px;
-            background-color: #ffffff; /*f9f9f9*/
-            box-shadow: 0px 4px 40px 4px rgba(0, 0, 0, 0.08);
-            font-family: 'Pretendard', sans-serif;
-            font-size: 14px;
-        }
-        .travel-card-header {
-            display: flex;
-            align-items: center; /* 이미지와 텍스트 수평 정렬 */
-            gap: 10px; /* 이미지와 텍스트 간 간격 */
-            margin-bottom: 8px; /* 헤더와 회색선 사이 간격 */
-        }
-        .travel-card-header img {
-            width: 40px; /* 이미지 너비 */
-            height: 40px; /* 이미지 높이 */
-            object-fit: cover; /* 비율 유지 */
-            border-radius: 8px; /* 이미지 모서리 둥글게 */
-        }
-        .travel-card-header h5 {
-            margin: 0;
-            font-size: 14px;
-            font-family: 'Pretendard', sans-serif;
-            display: inline;
-        }
-        .travel-card-header p.time {
-            margin: 0;
-            font-size: 12px;
-            color: #888888;
-            display: inline;
-            margin: 0 0 5px 0;
-        }
-        .travel-card hr {
-            margin: 8px 0;
-            border: none;
-            border-top: 1px solid #e4e4e4;
-        }
-        .travel-card p.description {
-            font-size: 13px;
-            margin: 0;
-        }
-
+    .travel-card-container {
+        display: flex;
+        align-items: flex-start; /* 동그라미와 카드 상단 정렬 */
+        margin-bottom: 15px;
+    }
+    .card-number {
+        margin-right: 10px; /* 동그라미와 카드 사이 간격 */
+    }
+    .circle {
+        width: 21px;
+        height: 21px;
+        border-radius: 50%; /* 원형 */
+        background-color: #00199A; /* 파란색 배경 */
+        color: white; /* 흰색 텍스트 */
+        font-size: 11px;
+        font-family: 'Pretendard', sans-serif;
+        text-align: center;
+        line-height: 21px;
+    }
+    .travel-card {
+        flex: 1;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: #ffffff; /*f9f9f9*/
+        box-shadow: 0px 4px 40px 4px rgba(0, 0, 0, 0.08);
+        font-family: 'Pretendard', sans-serif;
+        font-size: 14px;
+    }
+    .travel-card-header {
+        display: flex;
+        align-items: center; /* 이미지와 텍스트 수평 정렬 */
+        gap: 10px; /* 이미지와 텍스트 간 간격 */
+        margin-bottom: 8px; /* 헤더와 회색선 사이 간격 */
+    }
+    .travel-card-header img {
+        width: 40px; /* 이미지 너비 */
+        height: 40px; /* 이미지 높이 */
+        object-fit: cover; /* 비율 유지 */
+        border-radius: 8px; /* 이미지 모서리 둥글게 */
+    }
+    .travel-card-header h5 {
+        margin: 0;
+        font-size: 14px;
+        font-family: 'Pretendard', sans-serif;
+        color: black;
+        display: inline;
+    }
+    .travel-card-header p.time {
+        margin: 0;
+        font-size: 12px;
+        font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
+        color: #888888;
+        display: inline;
+        margin: 0 0 5px 0;
+    }
+    .travel-card hr {
+        margin: 8px 0;
+        border: none;
+        border-top: 1px solid #e4e4e4;
+    }
+    .travel-card p.description {
+        font-size: 13px;
+        font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
+        color: black;
+        margin: 0;
+    }
     </style>
     """
 
@@ -329,16 +503,17 @@ def accommodation_card_style():
             font-size: 12px;
             font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
             font-weight: bold;
+            color: black;
             display: inline;
             margin: 0 0 5px 0;
         }
         .accommodation-card p {
             font-size: 12px;
             font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
+            color: black;
             display: inline;
             margin: 0 0 5px 0;
         }
-
     </style>
 """
 
@@ -348,8 +523,9 @@ def title_style():
     <style>
         .accommodation-title {
             font-size: 20px; /* 원하는 크기로 조정 */
+            font-family: 'Pretendard', sans-serif; /* Pretendard 적용 */
             font-weight: bold;
-            color: #333333;
+            color: black;
             margin-bottom: 10px;
         }
     </style>
